@@ -1,11 +1,11 @@
 {
-  "name": "@modelcontextprotocol/create-server",
+  "name": "@dkoosis/create-server",
   "version": "0.3.1",
   "description": "CLI tool to create new MCP servers",
   "license": "MIT",
-  "author": "Anthropic, PBC (https://anthropic.com)",
-  "homepage": "https://modelcontextprotocol.io",
-  "bugs": "https://github.com/modelcontextprotocol/create-typescript-server/issues",
+  "author": "Your Name (Your Website/Profile)",
+  "homepage": "https://github.com/dkoosis/create-typescript-server",
+  "bugs": "https://github.com/dkoosis/create-typescript-server/issues",
   "type": "module",
   "bin": {
     "create-mcp-server": "build/index.js"

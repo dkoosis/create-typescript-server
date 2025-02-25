@@ -1,3 +1,7 @@
+<!-- File: create-typescript-server/README.md -->
+<!-- Generated from template: README.md.ejs -->
+<!-- This file was generated using EJS templating. -->
+<!-- To modify this file, edit the template in 'template/README.md.ejs'. -->
 # my-test-server MCP Server
 
 A Model Context Protocol server

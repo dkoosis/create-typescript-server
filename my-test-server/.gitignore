@@ -1,3 +1,7 @@
+// File: create-typescript-server/.gitignore
+// Copied from template: dotfile-gitignore
+// This file was copied directly from the template.
+// To modify this file, edit the template in 'template/dotfile-gitignore'.
 node_modules/
 build/
 *.log

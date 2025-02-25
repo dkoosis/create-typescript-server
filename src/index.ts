@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// File: create-typescript-server/src/index.ts
+// Purpose: Main entry point for the MCP server creation CLI tool
+
 import chalk from "chalk";
 import { Command } from "commander";
 import ejs from "ejs";
@@ -10,6 +13,23 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Options for creating a new MCP server
+ * @interface CreateServerOptions
+ * @property {string} [name] - The name of the server (optional in CLI, prompted if not provided)
+ * @property {string} [description] - The description of the server (optional in CLI, prompted if not provided)
+ */
+interface CreateServerOptions {
+  name?: string;
+  description?: string;
+}
+
+/**
+ * Determines the appropriate configuration directory for Claude based on the operating system
+ * @returns {string} Path to the Claude configuration directory
+ * @throws {Error} If the operating system is not supported or environment variables are missing
+ */
 function getClaudeConfigDir(): string {
   switch (os.platform()) {
     case "darwin":
@@ -31,7 +51,13 @@ function getClaudeConfigDir(): string {
   }
 }
 
-async function updateClaudeConfig(name: string, directory: string) {
+/**
+ * Updates the Claude configuration to include the newly created MCP server
+ * @param {string} name - The name of the MCP server to register
+ * @param {string} directory - The directory where the server is created
+ * @returns {Promise<void>}
+ */
+async function updateClaudeConfig(name: string, directory: string): Promise<void> {
   try {
     const configFile = path.join(
       getClaudeConfigDir(),
@@ -87,7 +113,21 @@ async function updateClaudeConfig(name: string, directory: string) {
   }
 }
 
-async function createServer(directory: string, options: any = {}) {
+/**
+ * Creates a new MCP server in the specified directory
+ * 
+ * This function:
+ * 1. Validates the target directory
+ * 2. Prompts for any missing configuration options
+ * 3. Creates the server directory structure
+ * 4. Processes template files, adding path information and generation details
+ * 5. Configures the server for use with Claude.app if requested
+ * 
+ * @param {string} directory - The target directory to create the server in
+ * @param {CreateServerOptions} options - Configuration options for the server
+ * @returns {Promise<void>}
+ */
+async function createServer(directory: string, options: CreateServerOptions = {}): Promise<void> {
   // Check if directory already exists
   try {
     await fs.access(directory);
@@ -138,33 +178,131 @@ async function createServer(directory: string, options: any = {}) {
     const templateDir = path.join(__dirname, "../template");
     const files = await fs.readdir(templateDir, { recursive: true });
 
-    for (const file of files) {
+    // Create files from templates
+    const createFilePromises = files.map(async (file) => {
       const sourcePath = path.join(templateDir, file);
       const stats = await fs.stat(sourcePath);
 
-      if (!stats.isFile()) continue;
+      if (!stats.isFile()) return;
 
       // Special handling for dot files - remove the leading dot from template name
       const targetPath = path.join(
         directory,
         file.startsWith('dotfile-')
-          ? `.${file.slice(8).replace('.ejs', '')}`
-          : file.replace('.ejs', '')
+        ? `.${file.slice(8).replace('.ejs', '')}`
+        : file.replace('.ejs', '')
       );
-      const targetDir = path.dirname(targetPath);
 
-      // Create subdirectories if needed
-      await fs.mkdir(targetDir, { recursive: true });
+      // Get relative path for the file header
+      const relativePath = targetPath.replace(directory + path.sep, '');
+      
+      // Read the source content
+      const sourceContent = await fs.readFile(sourcePath, "utf-8");
+      
+      // Handle differently based on file type
+      const ext = path.extname(targetPath.replace('.ejs', '')).toLowerCase();
+      const isJson = ext === '.json';
+      const isMarkdown = ext === '.md';
+      
+      // Process the file based on its type
+      let content = '';
+      let hasShebang = false;
+      
+      // Check if content has a shebang line
+      if (sourceContent.startsWith('#!')) {
+        hasShebang = true;
+      }
+      
+      if (file.endsWith('.ejs')) {
+        // For EJS templates, render them first
+        content = ejs.render(sourceContent, config);
+        
+        // For JSON files, we can't add comments - they need to be valid JSON
+        if (!isJson && !hasShebang) {
+          // Determine the appropriate comment style
+          const commentPrefix = isMarkdown ? '<!-- ' : '// ';
+          const commentSuffix = isMarkdown ? ' -->' : '';
+          
+          // Add header with appropriate comment style
+          const header = [
+            `${commentPrefix}File: create-typescript-server/${relativePath}${commentSuffix}`,
+            `${commentPrefix}Generated from template: ${file}${commentSuffix}`,
+            `${commentPrefix}This file was generated using EJS templating.${commentSuffix}`,
+            `${commentPrefix}To modify this file, edit the template in 'template/${file}'.${commentSuffix}`,
+            '' // Empty line for spacing
+          ].join('\n');
+          
+          content = header + content;
+        } else if (hasShebang) {
+          // For files with shebang, preserve the shebang at the first line
+          const lines = content.split('\n');
+          const shebangLine = lines[0];
+          const restOfContent = lines.slice(1).join('\n');
+          
+          // Determine the appropriate comment style
+          const commentPrefix = '// ';
+          const commentSuffix = '';
+          
+          // Add header with appropriate comment style after the shebang
+          const header = [
+            `${commentPrefix}File: create-typescript-server/${relativePath}${commentSuffix}`,
+            `${commentPrefix}Generated from template: ${file}${commentSuffix}`,
+            `${commentPrefix}This file was generated using EJS templating.${commentSuffix}`,
+            `${commentPrefix}To modify this file, edit the template in 'template/${file}'.${commentSuffix}`,
+            '' // Empty line for spacing
+          ].join('\n');
+          
+          content = shebangLine + '\n' + header + restOfContent;
+        }
+      } else {
+        // For direct copies
+        content = sourceContent;
+        
+        // Don't add headers to JSON files or files with shebangs that aren't templates
+        if (!isJson && !hasShebang) {
+          // Determine the appropriate comment style
+          const commentPrefix = isMarkdown ? '<!-- ' : '// ';
+          const commentSuffix = isMarkdown ? ' -->' : '';
+          
+          // Add header with appropriate comment style
+          const header = [
+            `${commentPrefix}File: create-typescript-server/${relativePath}${commentSuffix}`,
+            `${commentPrefix}Copied from template: ${file}${commentSuffix}`,
+            `${commentPrefix}This file was copied directly from the template.${commentSuffix}`,
+            `${commentPrefix}To modify this file, edit the template in 'template/${file}'.${commentSuffix}`,
+            '' // Empty line for spacing
+          ].join('\n');
+          
+          content = header + content;
+        } else if (hasShebang) {
+          // For files with shebang, preserve the shebang at the first line
+          const lines = content.split('\n');
+          const shebangLine = lines[0];
+          const restOfContent = lines.slice(1).join('\n');
+          
+          // Determine the appropriate comment style
+          const commentPrefix = '// ';
+          const commentSuffix = '';
+          
+          // Add header with appropriate comment style after the shebang
+          const header = [
+            `${commentPrefix}File: create-typescript-server/${relativePath}${commentSuffix}`,
+            `${commentPrefix}Copied from template: ${file}${commentSuffix}`,
+            `${commentPrefix}This file was copied directly from the template.${commentSuffix}`,
+            `${commentPrefix}To modify this file, edit the template in 'template/${file}'.${commentSuffix}`,
+            '' // Empty line for spacing
+          ].join('\n');
+          
+          content = shebangLine + '\n' + header + restOfContent;
+        }
+      }
 
-      // Read and process template file
-      let content = await fs.readFile(sourcePath, "utf-8");
-
-      // Use EJS to render the template
-      content = ejs.render(content, config);
-
-      // Write processed file
+      // Write the processed file
+      await fs.mkdir(path.dirname(targetPath), { recursive: true });
       await fs.writeFile(targetPath, content);
-    }
+    });
+
+    await Promise.all(createFilePromises);
 
     spinner.succeed(chalk.green("MCP server created successfully!"));
 

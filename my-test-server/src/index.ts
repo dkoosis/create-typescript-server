@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+// File: create-typescript-server/src/index.ts
+// Generated from template: src/index.ts.ejs
+// This file was generated using EJS templating.
+// To modify this file, edit the template in 'template/src/index.ts.ejs'.
 
 /**
  * This is a template MCP server that implements a simple notes system.
