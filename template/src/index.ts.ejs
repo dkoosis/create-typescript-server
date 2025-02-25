@@ -21,18 +21,85 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 /**
- * Type alias for a note object.
+ * Custom error class for MCP errors with status codes
  */
-type Note = { title: string, content: string };
+class MCPError extends Error {
+  code: string;
+  status: number;
+
+  constructor(code: string, message: string, status: number = 400) {
+    super(message);
+    this.name = 'MCPError';
+    this.code = code;
+    this.status = status;
+  }
+}
+
+/**
+ * Type definitions for the Note system
+ */
+interface Note {
+  title: string;
+  content: string;
+  createdAt: Date;
+}
+
+type NoteStore = Record<string, Note>;
+
+// URI scheme for notes
+const NOTE_URI_SCHEME = "note:///";
 
 /**
  * Simple in-memory storage for notes.
  * In a real implementation, this would likely be backed by a database.
  */
-const notes: { [id: string]: Note } = {
-  "1": { title: "First Note", content: "This is note 1" },
-  "2": { title: "Second Note", content: "This is note 2" }
+const notes: NoteStore = {
+  "1": { 
+    title: "First Note", 
+    content: "This is note 1",
+    createdAt: new Date()
+  },
+  "2": { 
+    title: "Second Note", 
+    content: "This is note 2",
+    createdAt: new Date()
+  }
 };
+
+/**
+ * Helper function to validate and extract note ID from URI
+ */
+function getNoteIdFromUri(uri: string): string {
+  try {
+    const url = new URL(uri);
+    
+    if (!uri.startsWith(NOTE_URI_SCHEME)) {
+      throw new MCPError(
+        "invalid_uri",
+        `Invalid URI scheme. Expected ${NOTE_URI_SCHEME}`,
+        400
+      );
+    }
+    
+    return url.pathname.replace(/^\//, '');
+  } catch (error) {
+    if (error instanceof MCPError) {
+      throw error;
+    }
+    throw new MCPError(
+      "invalid_uri", 
+      `Invalid URI format: ${uri}`, 
+      400
+    );
+  }
+}
+
+/**
+ * Helper to generate a note URI from an ID
+ */
+function createNoteUri(id: string): string {
+  return `${NOTE_URI_SCHEME}${id}`;
+}
 
 /**
  * Create an MCP server with capabilities for resources (to list/read notes),
@@ -57,15 +124,15 @@ const server = new Server(
  * Each note is exposed as a resource with:
  * - A note:// URI scheme
  * - Plain text MIME type
- * - Human readable name and description (now including the note title)
+ * - Human readable name and description
  */
 server.setRequestHandler(ListResourcesRequestSchema, async () => {
   return {
     resources: Object.entries(notes).map(([id, note]) => ({
-      uri: `note:///${id}`,
+      uri: createNoteUri(id),
       mimeType: "text/plain",
       name: note.title,
-      description: `A text note: ${note.title}`
+      description: `A text note: ${note.title} (Created: ${note.createdAt.toLocaleString()})`,
     }))
   };
 });
@@ -75,12 +142,15 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
  * Takes a note:// URI and returns the note content as plain text.
  */
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-  const url = new URL(request.params.uri);
-  const id = url.pathname.replace(/^\//, '');
+  const id = getNoteIdFromUri(request.params.uri);
   const note = notes[id];
 
   if (!note) {
-    throw new Error(`Note ${id} not found`);
+    throw new MCPError(
+      "not_found",
+      `Note ${id} not found`,
+      404
+    );
   }
 
   return {
@@ -126,28 +196,58 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
  * Creates a new note with the provided title and content, and returns success message.
  */
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  switch (request.params.name) {
-    case "create_note": {
-      const title = String(request.params.arguments?.title);
-      const content = String(request.params.arguments?.content);
-      if (!title || !content) {
-        throw new Error("Title and content are required");
-      }
-
-      const id = String(Object.keys(notes).length + 1);
-      notes[id] = { title, content };
-
-      return {
-        content: [{
-          type: "text",
-          text: `Created note ${id}: ${title}`
-        }]
-      };
-    }
-
-    default:
-      throw new Error("Unknown tool");
+  if (request.params.name !== "create_note") {
+    throw new MCPError(
+      "unknown_tool",
+      `Unknown tool: ${request.params.name}`,
+      400
+    );
   }
+
+  const args = request.params.arguments;
+  
+  if (!args) {
+    throw new MCPError(
+      "missing_arguments",
+      "Missing required arguments",
+      400
+    );
+  }
+
+  const title = args.title;
+  const content = args.content;
+
+  if (typeof title !== "string" || !title.trim()) {
+    throw new MCPError(
+      "invalid_argument",
+      "Title is required and must be a non-empty string",
+      400
+    );
+  }
+
+  if (typeof content !== "string" || !content.trim()) {
+    throw new MCPError(
+      "invalid_argument",
+      "Content is required and must be a non-empty string",
+      400
+    );
+  }
+
+  // Generate a new ID - in production you might want a more robust ID generation method
+  const id = String(Object.keys(notes).length + 1);
+  
+  notes[id] = { 
+    title: title.trim(), 
+    content: content.trim(),
+    createdAt: new Date()
+  };
+
+  return {
+    content: [{
+      type: "text",
+      text: `Created note ${id}: ${title}`
+    }]
+  };
 });
 
 /**
@@ -171,17 +271,35 @@ server.setRequestHandler(ListPromptsRequestSchema, async () => {
  */
 server.setRequestHandler(GetPromptRequestSchema, async (request) => {
   if (request.params.name !== "summarize_notes") {
-    throw new Error("Unknown prompt");
+    throw new MCPError(
+      "unknown_prompt",
+      `Unknown prompt: ${request.params.name}`,
+      400
+    );
   }
 
   const embeddedNotes = Object.entries(notes).map(([id, note]) => ({
     type: "resource" as const,
     resource: {
-      uri: `note:///${id}`,
+      uri: createNoteUri(id),
       mimeType: "text/plain",
       text: note.content
     }
   }));
+
+  if (embeddedNotes.length === 0) {
+    return {
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: "There are no notes to summarize. Please create some notes first using the create_note tool."
+          }
+        }
+      ]
+    };
+  }
 
   return {
     messages: [
@@ -212,9 +330,27 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
  * This allows the server to communicate via standard input/output streams.
  */
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  try {
+    const transport = new StdioServerTransport();
+    console.log("Starting MCP server...");
+    await server.connect(transport);
+    console.log("MCP server started and ready to receive requests");
+  } catch (error) {
+    console.error("Failed to start server:", error);
+    process.exit(1);
+  }
 }
+
+// Handle unexpected errors and shutdown gracefully
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught exception:", error);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled rejection:", reason);
+  process.exit(1);
+});
 
 main().catch((error) => {
   console.error("Server error:", error);
