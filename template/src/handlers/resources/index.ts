@@ -20,7 +20,7 @@ import { log } from "../../utils/logging.js";
  * Register all resource handlers with the server
  */
 export function registerResourceHandlers(server: Server): void {
-  log("Registering resource handlers");
+  log("Registering redsource handlers");
   
   // EXAMPLE CODE: Remove this when implementing your own functionality
   registerNotesResourceHandlers(server);
