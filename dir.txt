@@ -1,0 +1,71 @@
+.
+├── CODE_OF_CONDUCT.md
+├── CONTRIBUTING.md
+├── LICENSE
+├── README.md
+├── SECURITY.md
+├── create-structure.sh
+├── dir.txt
+├── my-test-server
+│   ├── README.md
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── src
+│   │   └── index.ts
+│   └── tsconfig.json
+├── notes-txt.md
+├── package-lock.json
+├── package.json
+├── rtm-server
+│   ├── README.md
+│   ├── eslint.config.js
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── src
+│   │   ├── index.ts
+│   │   └── rtm
+│   │       ├── api-client.ts
+│   │       ├── config.ts
+│   │       └── health.ts
+│   └── tsconfig.json
+├── schema.ts
+├── src
+│   └── index.ts
+├── template
+│   ├── README.md.ejs
+│   ├── dotfile-gitignore
+│   ├── jest.config.js
+│   ├── package.json.ejs
+│   ├── src
+│   │   ├── config.ts
+│   │   ├── dev
+│   │   │   ├── dashboard.ts
+│   │   │   └── index.ts
+│   │   ├── handlers
+│   │   │   ├── index.ts
+│   │   │   ├── prompts
+│   │   │   │   ├── index.ts
+│   │   │   │   └── notes.ts
+│   │   │   ├── resources
+│   │   │   │   ├── index.ts
+│   │   │   │   └── notes.ts
+│   │   │   └── tools
+│   │   │       ├── index.ts
+│   │   │       └── notes.ts
+│   │   ├── index.ts
+│   │   ├── index.ts.ejs
+│   │   ├── services
+│   │   │   ├── index.ts
+│   │   │   └── notes.ts
+│   │   ├── types
+│   │   │   ├── index.ts
+│   │   │   └── notes.ts
+│   │   └── utils
+│   │       ├── errors.ts
+│   │       ├── index.ts
+│   │       └── logging.ts
+│   ├── tsconfig.json
+│   └── typedoc.json
+└── tsconfig.json
+
+17 directories, 52 files
